@@ -380,7 +380,7 @@ if ~isempty(iTTLevents)
                 end
                 
             else % For all events after the first event
-                if TTLSamples(ii) - TTLSamples(ii-1) >= (postBuff + abs(preBuff)) %Only if theres more than prebuff+post-buff between events do you reset the baselineData…if not it will just use the previous baselineData.
+                if TTLSamples(ii) - TTLSamples(ii-1) >= (postBuff + abs(preBuff)) %Only if theres more than prebuff+post-buff between events do you reset the baselineDataÂ…if not it will just use the previous baselineData.
                     baselineData = timeSeries(:, round(TTLSamples(ii-1) + postBuff): round(TTLSamples(ii)-1));
                     
                     % Check if part of the baseline includes a BAD segment and remove that part
