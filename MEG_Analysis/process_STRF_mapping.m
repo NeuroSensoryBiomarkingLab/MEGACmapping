@@ -13,7 +13,7 @@ function varargout = process_STRF_mapping( varargin )
 
 % You will find the process window under the category "STRF"
 
-macro_methodcall;
+eval(macro_method);
 end
 
 %% ===== GET DESCRIPTION =====
@@ -61,9 +61,19 @@ sProcess.options.label_description.Comment = '<BR><B><U>Output Options</U></B>:'
 sProcess.options.label_description.Type    = 'label';
 
 % Save directory
+SelectOptions = {...
+    '', ...                               % Filename
+    '', ...                               % FileFormat
+    'open', ...                           % Dialog type: {open,save}
+    'Save directory...', ...               % Window title
+    'ExportData', ...                     % LastUsedDir: {ImportData,ImportChannel,ImportAnat,ExportChannel,ExportData,ExportAnat,ExportProtocol,ExportImage,ExportScript}
+    'single', ...                         % Selection mode: {single,multiple}
+    'dirs', ...                          % Selection mode: {files,dirs,files_and_dirs}
+    };                          % DefaultFormats: {ChannelIn,DataIn,DipolesIn,EventsIn,MriIn,NoiseCovIn,ResultsIn,SspIn,SurfaceIn,TimefreqIn
+
 sProcess.options.saveDir.Comment = 'Save directory for STRFs: ';
-sProcess.options.saveDir.Type    = 'text';
-sProcess.options.saveDir.Value   = 'X:/----/----';
+sProcess.options.saveDir.Type    = 'filename';
+sProcess.options.saveDir.Value   = SelectOptions;
 
 % Description
 sProcess.options.description.Comment = 'Output description (short descriptive text that will form the filename stem of output files): ';
@@ -123,14 +133,14 @@ sProcess.options.baseDist.Type = 'value';
 sProcess.options.baseDist.Value = {2.355, '', 3};
 
 % M50 Window
-sProcess.options.rM50Window.Comment = 'M50-Peak Search Window:';
-sProcess.options.rM50Window.Type = 'range';
-sProcess.options.rM50Window.Value = {[0.030, 0.075], 'ms', 0};
+sProcess.options.M50Window.Comment = 'M50-Peak Search Window:';
+sProcess.options.M50Window.Type = 'range';
+sProcess.options.M50Window.Value = {[0.030, 0.075], 'ms', 0};
 
 % M100 Window
-sProcess.options.rM100Window.Comment = 'M100-Peak Search Window:';
-sProcess.options.rM100Window.Type = 'range';
-sProcess.options.rM100Window.Value = {[0.075, 0.135], 'ms', 0};
+sProcess.options.M100Window.Comment = 'M100-Peak Search Window:';
+sProcess.options.M100Window.Type = 'range';
+sProcess.options.M100Window.Value = {[0.075, 0.135], 'ms', 0};
 
 % M50 Window for Gaussian
 sProcess.options.gM50Window.Comment = 'M50 Gaussian Fit Window:';
@@ -141,6 +151,7 @@ sProcess.options.gM50Window.Value = {[0.020, 0.085], 'ms', 0};
 sProcess.options.gM100Window.Comment = 'M100 Gaussian Fit Window:';
 sProcess.options.gM100Window.Type = 'range';
 sProcess.options.gM100Window.Value = {[0.075, 0.150], 'ms', 0};
+
 end
 
 %% ===== FORMAT COMMENT =====
@@ -158,7 +169,7 @@ bst_progress('text', 'Setting up variables...');
 % Setup process window options
 OPTIONS.eventStem = strtrim(sProcess.options.eventStem.Value);
 OPTIONS.allEventsName = strtrim(sProcess.options.allEventsName.Value);
-OPTIONS.saveDir = strtrim(sProcess.options.saveDir.Value);
+OPTIONS.saveDir = sProcess.options.saveDir.Value{1};
 OPTIONS.description = strtrim(sProcess.options.description.Value);
 OPTIONS.threshold  = sProcess.options.threshold.Value{1};
 OPTIONS.preBuff = sProcess.options.preBuff.Value{1}*1000;
@@ -169,21 +180,21 @@ OPTIONS.isMedfilt = sProcess.options.isMedfilt.Value{1};
 OPTIONS.isSmooth = sProcess.options.isSmooth.Value{1};
 OPTIONS.strfBaseline = sProcess.options.strfBaseline.Value{1}*1000;
 OPTIONS.baseDist = sProcess.options.baseDist.Value{1};
-OPTIONS.rM50Window = sProcess.options.rM50Window.Value{1}*1000;
-OPTIONS.rM100Window = sProcess.options.rM100Window.Value{1}*1000;
+OPTIONS.M50Window = sProcess.options.M50Window.Value{1}*1000;
+OPTIONS.M100Window = sProcess.options.M100Window.Value{1}*1000;
 OPTIONS.gM50Window = sProcess.options.gM50Window.Value{1}*1000;
 OPTIONS.gM100Window = sProcess.options.gM100Window.Value{1}*1000;
 
 % Setup save directory for output STRF files and databases
-mkdir(strcat(OPTIONS.saveDir, '/', sInputsB.SubjectName), sInputsA(1).Condition);
-mkdir(strcat(OPTIONS.saveDir, '/', sInputsB.SubjectName, '/', sInputsA(1).Condition), OPTIONS.description);
+mkdir(strcat(OPTIONS.saveDir, '\', sInputsB.SubjectName), sInputsA(1).Condition);
+mkdir(strcat(OPTIONS.saveDir, '\', sInputsB.SubjectName, '\', sInputsA(1).Condition), OPTIONS.description);
 
 % Get raw file data
 rawMat = in_bst_data(sInputsB(1).FileName);
 % Get all events
 events = rawMat.F.events;
 iFreqEvents = find(contains({events.label}, OPTIONS.eventStem));
-totalTTL(1:length(iFreqEvents)) = deal(0);
+totalStim(1:length(iFreqEvents)) = deal(0);
 % Get list of bad segments in raw file
 badSeg = panel_record('GetBadSegments', rawMat.F);
 badSeg = badSeg+1; %Brainstorm indexing starts at 0, so add 1 to make it start at 1
@@ -221,12 +232,12 @@ for iFile = 1:length(sInputsA)
     end
     
     % Detect significant activations using detectSpikes
-    [vals, lastD, lastM, lastB, totTTL] = detectSpikes(scoutMat, badSeg, OPTIONS, lastData, lastMask, lastBaseline, totalTTL, threshVals, TimeVector, events, iFreqEvents);
+    [vals, lastD, lastM, lastB, totStim] = detectSpikes(scoutMat, badSeg, OPTIONS, lastData, lastMask, lastBaseline, totalStim, threshVals, TimeVector, events, iFreqEvents);
     threshVals = vals;
     lastData = lastD;
     lastMask = lastM;
     lastBaseline = lastB;
-    totalTTL = totTTL;
+    totalStim = totStim;
     
     % Update progress bar
     bst_progress('set', progressPos + round((iFile / length(sInputsA)) * 100));
@@ -235,13 +246,13 @@ end
 % Save threshVals which represents the threshold values for each
 % significant activation
 bst_progress('text', 'Saving activation values...');
-save(strcat(OPTIONS.saveDir, '/', sInputsB.SubjectName, '/', sInputsA(1).Condition, '/', OPTIONS.description, '/threshVals.mat'), 'threshVals');
+save(strcat(OPTIONS.saveDir, '\', sInputsB.SubjectName, '\', sInputsA(1).Condition, '\', OPTIONS.description, '\threshVals.mat'), 'threshVals');
 
 % Get protocol info
 ProtocolInfo = bst_get('ProtocolInfo');
 
 % Generate maps
-mapGen(ChannelFlag, threshVals, scoutVertices, totalTTL, OPTIONS, sInputsA(1).iStudy, sInputsA(1).Condition, sInputsB.SubjectName, scoutMat.SurfaceFile, ProtocolInfo, events, iFreqEvents);
+mapGen(ChannelFlag, threshVals, scoutVertices, totalStim, OPTIONS, sInputsA(1).iStudy, sInputsA(1).Condition, sInputsB.SubjectName, scoutMat.SurfaceFile, ProtocolInfo, events, iFreqEvents);
 
 % Return the input files
 OutputFiles = {sInputsB(1).FileName};
@@ -249,7 +260,7 @@ end
 
 
 %% ===== Spike Detection =====
-function [vals, lastD, lastM, lastB, totTTL] = detectSpikes(scoutMat, badSeg, OPTIONS, lastData, lastMask, lastBaseline, totalTTL, threshVals, TimeVector, events, iFreqEvents)
+function [vals, lastD, lastM, lastB, totStim] = detectSpikes(scoutMat, badSeg, OPTIONS, lastData, lastMask, lastBaseline, totalStim, threshVals, TimeVector, events, iFreqEvents)
 
 % Create Bad Segment Mask
 toRemove = false(1,size(badSeg,2));
@@ -286,19 +297,19 @@ sFreq = round( 1 ./ (scoutMat.Time(2) - scoutMat.Time(1)));
 % meancorrected from DC offset removal
 timeSeries = abs(scoutMat.Value);
 
-%Find all TTL event times in this scout time series
-iallTTL = find(strcmp({events.label}, OPTIONS.allEventsName));
-iTTLevents = find(events(iallTTL).times >= scoutMat.Time(1) & events(iallTTL).times <= scoutMat.Time(end));
+%Find all stim event times in this scout time series
+iallStim = find(strcmp({events.label}, OPTIONS.allEventsName));
+iStimEvents = find(events(iallStim).times >= scoutMat.Time(1) & events(iallStim).times <= scoutMat.Time(end));
 
 %Convert the time value to the nearest sample
-TTLSamples = zeros(1, length(iTTLevents));
-for iii = 1:length(iTTLevents)
-    [~, iMin]= min(abs(scoutMat.Time - events(iallTTL).times(iTTLevents(iii)))); %find difference between target and vector and then the minimum to find nearest value
-    TTLSamples(iii) = iMin; %this is the nearest timepoint to the event
+StimSamples = zeros(1, length(iStimEvents));
+for ii = 1:length(iStimEvents)
+    [~, iMin]= min(abs(scoutMat.Time - events(iallStim).times(iStimEvents(ii)))); %find difference between target and vector and then the minimum to find nearest value
+    StimSamples(ii) = iMin; %this is the nearest timepoint to the event
 end
 
 % Find total number of tone pips for each frequency within this scout time
-% series and add this number to totalTTL to get a total count of TTLs
+% series and add this number to totalStim to get a total count of Stims
 % analysed for all input files A
 for iFreq = 1:length(iFreqEvents)
     iTrialFreqEvents = find(events(iFreqEvents(iFreq)).times >= scoutMat.Time(1) & events(iFreqEvents(iFreq)).times <= scoutMat.Time(end));
@@ -315,22 +326,22 @@ for iFreq = 1:length(iFreqEvents)
     iTrialFreqEvents(toRemove)=[];
     
     if ~isempty(iTrialFreqEvents)
-        totalTTL(iFreq) = totalTTL(iFreq) + length(iTrialFreqEvents);
+        totalStim(iFreq) = totalStim(iFreq) + length(iTrialFreqEvents);
     end
 end
-totTTL = totalTTL;
+totStim = totalStim;
 
 % DYNAMIC ZSCORE TRANSFORMATION OF SCOUT TIME SERIES
-if ~isempty(iTTLevents)
+if ~isempty(iStimEvents)
     % Set buffer durations
     preBuff = round(-1*(OPTIONS.preBuff/1000)*sFreq); %in milliseconds, then convert into samples
     postBuff = round((OPTIONS.postBuff/1000)*sFreq); %in milliseconds, then convert into samples
     
-    % Loop through each TTL event and determine if a new z-score baseline
+    % Loop through each Stim event and determine if a new z-score baseline
     % is calculated
-    for ii = 1:length(TTLSamples) 
-        if ii == 1 && ~isempty(lastBaseline) % Start by calculating the zscore for everything up to the first event using the last baseline
-            initSegData = timeSeries(:, 1:round(TTLSamples(ii)-1));
+    for iStim = 1:length(StimSamples) 
+        if iStim == 1 && ~isempty(lastBaseline) % Start by calculating the zscore for everything up to the first event using the last baseline
+            initSegData = timeSeries(:, 1:round(StimSamples(iStim)-1));
             initBaselineMean = mean(lastBaseline, 2);
             initBaselineStd = std(lastBaseline, 0, 2);
             
@@ -342,34 +353,34 @@ if ~isempty(iTTLevents)
             zscoreTimeSeries = initSegZscore;
         end
         
-        if ii == 1 && isempty(lastBaseline) % If this is the first block and the first event, take whatever is the initial segment baseline
-            baselineData = timeSeries(:, 1:TTLSamples(ii)-1);
+        if iStim == 1 && isempty(lastBaseline) % If this is the first block and the first event, take whatever is the initial segment baseline
+            baselineData = timeSeries(:, 1:StimSamples(iStim)-1);
             
             % Check if part of the baseline includes a BAD segment and remove that part
-            isBad = find(Smask(1:TTLSamples(ii)-1) == 0);
+            isBad = find(Smask(1:StimSamples(iStim)-1) == 0);
             if ~isempty(isBad)
                 baselineData(:,isBad) = [];
             end
-            zscoreTimeSeries = zeros(size(timeSeries,1), TTLSamples(ii)-1); %Add a filler at the front to keep same size as timeSeries
+            zscoreTimeSeries = zeros(size(timeSeries,1), StimSamples(iStim)-1); %Add a filler at the front to keep same size as timeSeries
             
         else % For everything after the initSeg of the scoutTimeSeries
-            if ii == 1 % If this is the first event, use the lastData as a starting point to determine if you
-                if TTLSamples(ii)-1 + size(lastData,2) >= (postBuff + abs(preBuff)) % If there is enough space, retake a new baseline
+            if iStim == 1 % If this is the first event, use the lastData as a starting point to determine if you
+                if StimSamples(iStim)-1 + size(lastData,2) >= (postBuff + abs(preBuff)) % If there is enough space, retake a new baseline
                     if size(lastData, 2) > postBuff % If part of the baseline can start in lastData, use it
-                        baselineData = cat(2, lastData(:, round(postBuff+1):end), timeSeries(:, 1:round(TTLSamples(ii)-1)));
+                        baselineData = cat(2, lastData(:, round(postBuff+1):end), timeSeries(:, 1:round(StimSamples(iStim)-1)));
                         
                         % Check if part of the baseline includes a BAD segment and remove that part
                         isBad = find(lastMask(round(postBuff+1):end) == 0);
-                        isBad = cat(2, isBad, (find(Smask(1:round(TTLSamples(ii)-1)) == 0)) + round(length(lastMask)-postBuff)); %Readjust indexes so that the follow the lastMask ones
+                        isBad = cat(2, isBad, (find(Smask(1:round(StimSamples(iStim)-1)) == 0)) + round(length(lastMask)-postBuff)); %Readjust indexes so that the follow the lastMask ones
                         if ~isempty(isBad)
                             baselineData(:,isBad) = [];
                         end
                         
                     else % Only use the current scoutTimeSeries, starting after when lastData's postBuff would have ended
-                        baselineData = timeSeries(:, round(postBuff - size(lastData,2) + 1):TTLSamples(ii)-1);
+                        baselineData = timeSeries(:, round(postBuff - size(lastData,2) + 1):StimSamples(iStim)-1);
                         
                         % Check if part of the baseline includes a BAD segment and remove that part
-                        isBad = find(Smask(round(postBuff - size(lastData,2) + 1):TTLSamples(ii)-1) == 0);
+                        isBad = find(Smask(round(postBuff - size(lastData,2) + 1):StimSamples(iStim)-1) == 0);
                         if ~isempty(isBad)
                             baselineData(:,isBad) = [];
                         end
@@ -380,11 +391,11 @@ if ~isempty(iTTLevents)
                 end
                 
             else % For all events after the first event
-                if TTLSamples(ii) - TTLSamples(ii-1) >= (postBuff + abs(preBuff)) %Only if theres more than prebuff+post-buff between events do you reset the baselineDataif not it will just use the previous baselineData.
-                    baselineData = timeSeries(:, round(TTLSamples(ii-1) + postBuff): round(TTLSamples(ii)-1));
+                if StimSamples(iStim) - StimSamples(iStim-1) >= (postBuff + abs(preBuff)) %Only if theres more than prebuff+post-buff between events do you reset the baselineData…if not it will just use the previous baselineData.
+                    baselineData = timeSeries(:, round(StimSamples(iStim-1) + postBuff): round(StimSamples(iStim)-1));
                     
                     % Check if part of the baseline includes a BAD segment and remove that part
-                    isBad = find(Smask(round(TTLSamples(ii-1) + postBuff): round(TTLSamples(ii)-1)) == 0);
+                    isBad = find(Smask(round(StimSamples(iStim-1) + postBuff): round(StimSamples(iStim)-1)) == 0);
                     if ~isempty(isBad)
                         baselineData(:,isBad) = [];
                     end
@@ -392,31 +403,31 @@ if ~isempty(iTTLevents)
             end
         end
         
-        if isempty(baselineData) && ii == 1 % If there is no baselineData that lies outside of a BAD segment, use the last one
+        if isempty(baselineData) && iStim == 1 % If there is no baselineData that lies outside of a BAD segment, use the last one
             if ~isempty(lastBaseline)
                 baselineData = lastBaseline;
             else
-                segData = timeSeries(:, TTLSamples(ii):round(TTLSamples(ii+1)-1)); % Take the segment from the current event to the sample just before the next event
-                zscoreTimeSeries = cat(2, zscoreTimeSeries, zeros(size(segData,1),size(segData,2))); % Add zeros until the next TTL event
+                segData = timeSeries(:, StimSamples(iStim):round(StimSamples(iStim+1)-1)); % Take the segment from the current event to the sample just before the next event
+                zscoreTimeSeries = cat(2, zscoreTimeSeries, zeros(size(segData,1),size(segData,2))); % Add zeros until the next Stim event
                 continue;
             end
-        elseif isempty(baselineData) % In the case where this is no longer the first TTL
+        elseif isempty(baselineData) % In the case where this is no longer the first Stim
             if isempty(previousBaseline)
-                segData = timeSeries(:, TTLSamples(ii):round(TTLSamples(ii+1)-1)); % Take segment from the current event to the sample just before the next event
-                zscoreTimeSeries = cat(2, zscoreTimeSeries, zeros(size(segData,1),size(segData,2))); % Add zeros until the next TTL event
+                segData = timeSeries(:, StimSamples(iStim):round(StimSamples(iStim+1)-1)); % Take segment from the current event to the sample just before the next event
+                zscoreTimeSeries = cat(2, zscoreTimeSeries, zeros(size(segData,1),size(segData,2))); % Add zeros until the next Stim event
                 continue;
             else
                 baselineData = previousBaseline;
             end
         end
         
-        if ii == length(TTLSamples) % If this is the last event
-            lastD = timeSeries(:, TTLSamples(ii):end);
-            lastM = Smask(TTLSamples(ii):end);
+        if iStim == length(StimSamples) % If this is the last event
+            lastD = timeSeries(:, StimSamples(iStim):end);
+            lastM = Smask(StimSamples(iStim):end);
             lastB = baselineData;
-            segData = timeSeries(:,TTLSamples(ii):end);
+            segData = timeSeries(:,StimSamples(iStim):end);
         else
-            segData = timeSeries(:, TTLSamples(ii):round(TTLSamples(ii+1)-1)); % Take segment from the current event to the sample just before the next event
+            segData = timeSeries(:, StimSamples(iStim):round(StimSamples(iStim+1)-1)); % Take segment from the current event to the sample just before the next event
         end
         
         baselineMean = mean(baselineData, 2);
@@ -437,7 +448,7 @@ if ~isempty(iTTLevents)
     % detected in BAD segments
     zscoreTimeSeries(:,~Smask) = deal(0);
     
-else % If there is no TTL in the segment, restart from scratch is if it was the first segment
+else % If there is no Stim in the segment, restart from scratch is if it was the first segment
     lastD = [];
     lastM = [];
     lastB = [];
@@ -479,7 +490,7 @@ end
 
 
 %% ===== MAP GENERATION =====
-function [] = mapGen(ChannelFlag, threshVals, vertices, totalTTL, OPTIONS, iStudy, conditionName, subjectName, surfaceFileName, ProtocolInfo, events, iFreqEvents)
+function [] = mapGen(ChannelFlag, threshVals, vertices, totalStim, OPTIONS, iStudy, conditionName, subjectName, surfaceFileName, ProtocolInfo, events, iFreqEvents)
 
 % Set progress bar
 bst_progress('text', 'Generating STRFs and maps...');
@@ -487,8 +498,8 @@ bst_progress('set', 0);
 
 %% PREPARE OUTPUT FILES
 sourceStem = OPTIONS.description;
-figureFileStem = strcat(OPTIONS.saveDir, '/', subjectName, '/', conditionName, '/', OPTIONS.description, '/');
-mapFileStem = strcat(ProtocolInfo.STUDIES, '/', subjectName, '/', conditionName, '/results_STRF_mapping_', char(datetime('now','TimeZone','local','Format','yyMMddHHmm')) , '_');
+figureFileStem = strcat(OPTIONS.saveDir, '\', subjectName, '\', conditionName, '\', OPTIONS.description, '\');
+mapFileStem = strcat(ProtocolInfo.STUDIES, '\', subjectName, '\', conditionName, '\results_STRF_mapping_', char(datetime('now','TimeZone','local','Format','yyMMddHHmm')) , '_');
 
 % Initialize source files for STRF maps
 iMap = 1;
@@ -535,7 +546,7 @@ save(strcat(figureFileStem, 'freqVals.mat'), 'freqVals');
 save(strcat(figureFileStem, 'allVertices.mat'), 'vertices');
 
 % Find how many vertices in the cortical surface
-cortexVertices = load(strcat(ProtocolInfo.SUBJECTS, '/', surfaceFileName), 'Vertices');
+cortexVertices = load(strcat(ProtocolInfo.SUBJECTS, '\', surfaceFileName), 'Vertices');
 totalVertices = length(cortexVertices.Vertices);
 
 % Get head model filename
@@ -601,12 +612,12 @@ sourceM100_lat_GAUSSIAN.Comment = strcat(sourceStem, '-M100-lat-GAUSSIAN');
 sourceM50_tempMod_GAUSSIAN.Comment = strcat(sourceStem, '-M50-tempMod-GAUSSIAN');
 sourceM100_tempMod_GAUSSIAN.Comment = strcat(sourceStem, '-M100-tempMod-GAUSSIAN');
 
-% Calculate compensation (compens1) to correct for slight imbalance in number of TTLs
+% Calculate compensation (compens1) to correct for slight imbalance in number of Stims
 % per frequency
-targetNum = mean(totalTTL);
-compens1 = zeros(1,length(totalTTL));
-for ii = 1:length(totalTTL)
-    compens1(ii) = targetNum/totalTTL(ii);
+targetNum = mean(totalStim);
+compens1 = zeros(1,length(totalStim));
+for iFreq = 1:length(totalStim)
+    compens1(iFreq) = targetNum/totalStim(iFreq);
 end
 
 % Initialize counters
@@ -620,6 +631,12 @@ for iVertex = 1:length(threshVals)
     % Generate STRF
     strfMatrix = strfGen(compens1, iFreqEvents, OPTIONS, threshVals(iVertex), events);
     
+    % Generate gaussian-fitted STRF
+    [M50_g, std_gaussianM50, M100_g, std_gaussianM100] = gaussianGen(strfMatrix, totalStim, OPTIONS);
+    
+    % Convert STRF into average values
+    strfMatrix = strfMatrix ./ length(threshVals(iVertex).TimeValues);
+    
     % Save STRF matrix
     STRF(:,:,iVertex) = strfMatrix;
    
@@ -631,18 +648,18 @@ for iVertex = 1:length(threshVals)
     
     % Extract X and Y
     [Ylim, Xlim] = size(strfMatrix);
-    Yincrement = length(totalTTL)/Ylim; 
-    Y = Yincrement:Yincrement:length(totalTTL);
+    Yincrement = length(totalStim)/Ylim; 
+    Y = Yincrement:Yincrement:length(totalStim);
     Xincrement = OPTIONS.strfLength/Xlim;
     X = -OPTIONS.strfLength:Xincrement:-Xincrement;
 
     %% STRF Features
     
     % Extract M50 response
-    subINT_M50 = strfMatrix(:, round((OPTIONS.strfLength-OPTIONS.rM50Window(2))/Xincrement):round((OPTIONS.strfLength-OPTIONS.rM50Window(1))/Xincrement)); %Only look for peak from -75 to -30ms    
+    subINT_M50 = strfMatrix(:, round((OPTIONS.strfLength-OPTIONS.M50Window(2))/Xincrement):round((OPTIONS.strfLength-OPTIONS.M50Window(1))/Xincrement)); %Only look for peak from -75 to -30ms    
     
     % Extract M50 features
-    [has_response, peakloc_col, peakloc_row, zscoreVal] = STRF_feat(subINT_M50, meanMatrix, stdMatrix, OPTIONS.strfLength, OPTIONS.rM50Window(2), Xincrement);
+    [has_response, peakloc_col, peakloc_row, zscoreVal] = STRF_feat(subINT_M50, meanMatrix, stdMatrix, OPTIONS.strfLength, OPTIONS.M50Window(2), Xincrement);
     
     if has_response
         has_M50(iVertex) = true;
@@ -658,10 +675,10 @@ for iVertex = 1:length(threshVals)
     
     
     % Extract M100 response
-    subINT_M100 = strfMatrix(:, round((OPTIONS.strfLength-OPTIONS.rM100Window(2))/Xincrement):round((OPTIONS.strfLength-OPTIONS.rM100Window(1))/Xincrement)); %Only look for peak from -75 to -30ms    
+    subINT_M100 = strfMatrix(:, round((OPTIONS.strfLength-OPTIONS.M100Window(2))/Xincrement):round((OPTIONS.strfLength-OPTIONS.M100Window(1))/Xincrement)); %Only look for peak from -75 to -30ms    
     
     % Extract M100 features
-    [has_response, peakloc_col, peakloc_row, zscoreVal] = STRF_feat(subINT_M100, meanMatrix, stdMatrix, OPTIONS.strfLength, OPTIONS.rM100Window(2), Xincrement);
+    [has_response, peakloc_col, peakloc_row, zscoreVal] = STRF_feat(subINT_M100, meanMatrix, stdMatrix, OPTIONS.strfLength, OPTIONS.M100Window(2), Xincrement);
     
     if has_response
         has_M100(iVertex) = true;
@@ -677,9 +694,6 @@ for iVertex = 1:length(threshVals)
     
 
     %% Gaussian-fit STRF Features
-    
-    % Generate gaussian-fitted STRF
-    [M50_g, std_gaussianM50, M100_g, std_gaussianM100] = gaussianGen(strfMatrix, totalTTL, OPTIONS);
     
     % Extract M50 features
     [has_response, peakloc_col, peakloc_row, strfBand, strfTempMod] = GAUSSIAN_feat(M50_g, std_gaussianM50, X, Y, OPTIONS, freqVals);
@@ -811,8 +825,6 @@ function strfMatrix = strfGen(compens1, iFreqEvents, OPTIONS, threshVals, events
         end
     end
     
-    strfMatrix = strfMatrix ./ length(threshVals.TimeValues); % Convert STRF into average values
-    
     % Post-processing:
     
     % Subtract mean of STRF baseline to centre baseline around zero
@@ -832,13 +844,13 @@ end
 
 
 %% ===== Gaussian-fit STRF Generator =====
-function [M50_g, std_gaussianM50, M100_g, std_gaussianM100] = gaussianGen(strfMatrix, totalTTL, OPTIONS)
+function [M50_g, std_gaussianM50, M100_g, std_gaussianM100] = gaussianGen(strfMatrix, totalStim, OPTIONS)
 
     %M50
     M50_g = zeros(size(strfMatrix,1),size(strfMatrix,2));
     [Ylim, Xlim] = size(strfMatrix);
-    Yincrement = length(totalTTL)/Ylim; % length(totalTTL) being the number of frequencies there are
-    yy = Yincrement:Yincrement:length(totalTTL);
+    Yincrement = length(totalStim)/Ylim; % length(totalStim) being the number of frequencies there are
+    yy = Yincrement:Yincrement:length(totalStim);
     Xincrement = OPTIONS.strfLength/Xlim;
     xx = -OPTIONS.strfLength:Xincrement:-Xincrement;
     
